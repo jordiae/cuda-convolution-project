@@ -6,11 +6,11 @@
 // https://en.wikipedia.org/wiki/Kernel_(image_processing)#Convolution
 // The only difference is that we are doing it for the 3 channel/colours.
 //double K[3][3] = {1/9}; // mean filter
-bmp_img FilterSeq (double FilterMatrix[3][3], bmp_img img_orig) {
+bmp_img FilterSeq (double FilterMatrix[3][3], bmp_img img_orig, int height, int width) {
     bmp_img img_filt;
-    bmp_img_init_df(&img_filt, 216, 216);
-    for (size_t i = 0; i < 216; i++) { // image row
-        for (size_t j = 0; j < 216; j++) { // pixels in image row
+    bmp_img_init_df(&img_filt, height, width);
+    for (size_t i = 0; i < height; i++) { // image row
+        for (size_t j = 0; j < width; j++) { // pixels in image row
             double accumulator_red = 0;
             double accumulator_green = 0;
             double accumulator_blue = 0;
@@ -39,8 +39,9 @@ int main (int argc, char *argv[])
     bmp_img img_orig;
 	bmp_img_read(&img_orig, "sample_crop.bmp");
     double K[3][3] = {0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11}; // mean filter
-    bmp_img img_filt  = FilterSeq (K, img_orig);
+    bmp_img img_filt  = FilterSeq (K, img_orig, 216, 216);
     bmp_img_write(&img_filt, "sample_filtered.bmp");
     bmp_img_free(&img_orig);
     bmp_img_free(&img_filt);
 }
+
