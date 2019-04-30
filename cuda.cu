@@ -432,7 +432,7 @@ void matrix_to_img2(unsigned char* matrix, int height, int width, bmp_img img) {
 }
 
 
-void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt) {
+void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt) {
     //int row = blockIdx.y * blockDim.y + threadIdx.y;
     //int col = blockIdx.x * blockDim.x + threadIdx.x;
     //int i = row;
@@ -440,29 +440,36 @@ void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int 
     //if (row < height && col < width) {
     //bmp_img img_filt;
     //bmp_img_init_df(&img_filt, height, width);
-    for (size_t i = 0; i < height; i++) { // image row
-        for (size_t j = 0; j < width; j++) { // pixels in image row
-            double accumulator_red = 0;
-            double accumulator_green = 0;
-            double accumulator_blue = 0;
+    for (size_t i = size_filter/2; i < height-size_filter/2; i++) { // image row
+        for (size_t j = size_filter/2; j < width-size_filter/2; j++) { // pixels in image row
+            float accumulator_red = 0;
+            float accumulator_green = 0;
+            float accumulator_blue = 0;
+            //int count = 0;
+            // position mask:
+            //def f(i,j,k,l):
+            //    return (i+k-1,j+l-1)
             for (size_t k = 0; k < size_filter; k++) { // kernel rows
                 for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                    if ((i % size_filter == k) && (j % size_filter == l)) {// corresponding element
-                        accumulator_red += FilterMatrix[k*size_filter + l] * (double) (matrix_orig[(i*width + j)*size_filter + 0]);
-                        accumulator_green += FilterMatrix[k*size_filter + l] * (double) (matrix_orig[(i*width + j)*size_filter + 1]);
-                        accumulator_blue += FilterMatrix[k*size_filter + l] * (double) (matrix_orig[(i*width + j)*size_filter + 2]);
-                    }
+                    //if ((i % size_filter == k) && (j % size_filter == l)) {// corresponding element
+                        accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 0]);
+                        accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 1]);
+                        accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 2]);
+                        //printf("%d %f %f %d \n", (unsigned int) accumulator_red, accumulator_red, FilterMatrix[k*size_filter + l], (int) (matrix_orig[(i*width + j)*size_filter + 0]));
+                        //count += 1;
+                    //}
                 }
             }
-            matrix_filt[(i*width + j)*size_filter + 0]= (int) accumulator_red;
-            matrix_filt[(i*width + j)*size_filter + 1] = (int) accumulator_green;
-            matrix_filt[(i*width + j)*size_filter + 2] = (int) accumulator_blue;
+            //printf("%d\n", count);
+            matrix_filt[(i*width + j)*size_filter + 0]= (unsigned int) accumulator_red;
+            matrix_filt[(i*width + j)*size_filter + 1] = (unsigned int) accumulator_green;
+            matrix_filt[(i*width + j)*size_filter + 2] = (unsigned int) accumulator_blue;
+            
         }
     }
     //return img_filt;
     //}
 }
-
 
 int main (int argc, char *argv[])
 {
