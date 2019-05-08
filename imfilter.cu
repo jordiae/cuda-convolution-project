@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "lib/libbmp.h"
 
 
@@ -44,7 +45,7 @@ __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* m
 
 
 
-void img_to_matrix2(bmp_img img, int height, int width, unsigned char* matrix) {
+void img_to_matrix(bmp_img img, int height, int width, unsigned char* matrix) {
     for (size_t i = 0; i < height; i++) { // image row
         for (size_t j = 0; j < width; j++) { // pixels in image row
             matrix[(i*width +j)*3 + 0] = img.img_pixels[i][j].red;
@@ -56,7 +57,7 @@ void img_to_matrix2(bmp_img img, int height, int width, unsigned char* matrix) {
     }
 }
 
-void matrix_to_img2(unsigned char* matrix, int height, int width, bmp_img img) {
+void matrix_to_img(unsigned char* matrix, int height, int width, bmp_img img) {
     for (size_t i = 0; i < height; i++) { // image row
         for (size_t j = 0; j < width; j++) { // pixels in image row
             img.img_pixels[i][j].red = matrix[(i*width +j)*3 + 0];
@@ -110,39 +111,44 @@ void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int 
 
 int main (int argc, char *argv[])
 {
-
-
-
-
-    // cuda
-
-    int height = 216;
-    int width = 216;
-    int channels = 3;
+    if (argc!=2) {
+        printf("Usage: ./cuda image_to_be_filter\n");
+        exit(1);
+    }
 
     unsigned char *h_matrix_orig;
     h_matrix_orig = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
     bmp_img h_img_orig;
-    bmp_img_read(&h_img_orig, "sample_crop.bmp");
-    img_to_matrix2(h_img_orig, height, width, h_matrix_orig);
+    bmp_img_read(&h_img_orig, argv[1]);
+    img_to_matrix(h_img_orig, height, width, h_matrix_orig);
 
-    printf("matrix: %d\n", (int)h_matrix_orig[(215*width +215)*3+2]);
-    unsigned char *h_matrix_filt;
-    h_matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
+
+    int width = (int) h_img_orig.img_header.biWidth;
+    int height = (int) h_img_orig.img_header.biHeight;
+    int channels = 3;
+    printf("La imagen es %d X %d\n", width, height);
+
+    unsigned char *matrix_filt;
+    matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
     double h_K[9] = {0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11};
-    unsigned char *d_matrix_orig, *d_matrix_filt;
+
+    // Sequential
+    seq(channels, h_K, h_matrix_orig, width, height, matrix_filt);
+
+
+    // Cuda 1
+    unsigned char *d_matrix_orig, *d_matrix_filt, *h_matrix_filt;
     double *d_K;
 
     int numBytesK = sizeof(h_K);
     int numBytesOrig = sizeof(char)*height*width*channels;
     int numBytesFilt = sizeof(char)*height*width*channels;
 
+
     // Obtener Memoria en el device
     cudaMalloc((double**)&d_K, numBytesK);
     cudaMalloc((unsigned char ***)&d_matrix_orig, numBytesOrig);
     cudaMalloc((unsigned char ***)&d_matrix_filt, numBytesFilt);
-    //cudaMallocPitch(unsigned char ***)&d_matrix_orig, height, width, channels);
-    //cudaMallocPitch(unsigned char ***)&d_matrix_filt, height, width, channels);
 
     // Copiar datos desde el host en el device
     cudaError err = cudaMemcpy(d_K, h_K, numBytesK, cudaMemcpyHostToDevice);
@@ -157,14 +163,16 @@ int main (int argc, char *argv[])
     // Ejecutar el kernel
     int SIZE = 32;
     int nThreads = SIZE;
-    int N = 216;
-    int M = 216;
+    int N = width;
+    int M = height;
+
     // numero de Blocks en cada dimension
     int nBlocksN = (N+nThreads-1)/nThreads;
     int nBlocksM = (M+nThreads-1)/nThreads;
     dim3 dimGrid(nBlocksM, nBlocksN, 1);
     dim3 dimBlock(nThreads, nThreads, 1);
-    Kernel01<<<dimGrid, dimBlock>>>(3, d_K, d_matrix_orig, 216, 216, d_matrix_filt);
+    Kernel01<<<dimGrid, dimBlock>>>(channels, d_K, d_matrix_orig, width, height, d_matrix_filt);
+
     if (cudaSuccess != cudaGetLastError())
         printf("3: CUDA error at kernel exec: %s\n", cudaGetErrorString(cudaGetLastError()));
     err = cudaMemcpy(h_matrix_filt, d_matrix_filt, numBytesFilt, cudaMemcpyDeviceToHost);
@@ -176,64 +184,26 @@ int main (int argc, char *argv[])
     cudaFree(d_matrix_orig);
     cudaFree(d_matrix_filt);
 
-    bmp_img h_img_filt;
-    bmp_img_init_df(&h_img_filt, height, width);
-    matrix_to_img2(h_matrix_filt, height, width, h_img_filt);
-    bmp_img_write(&h_img_filt, "sample_filtered3.bmp");
 
-    free(h_matrix_orig);
-    free(h_matrix_filt);
-
-    bmp_img_free(&h_img_orig);
-    bmp_img_free(&h_img_filt);
-
-    /*
-    // sequential
-    int height = 216;
-    int width = 216;
-    int channels = 3;
-
-    unsigned char *h_matrix_orig;
-    h_matrix_orig = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
-    bmp_img h_img_orig;
-    bmp_img_read(&h_img_orig, "sample_crop.bmp");
-    img_to_matrix2(h_img_orig, height, width, h_matrix_orig);
-
-    printf("matrix: %d\n", (int)h_matrix_orig[215*width + 215*3 + 2]);
-    unsigned char *h_matrix_filt;
-    h_matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
-    double h_K[9] = {0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11};
-    unsigned char *d_matrix_orig, *d_matrix_filt;
-    double *d_K;
-
-    int numBytesK = sizeof(h_K);
-    int numBytesOrig = sizeof(char)*height*width*channels;
-    int numBytesFilt = sizeof(char)*height*width*channels;
-
-
-
-    // Ejecutar el kernel
-    int SIZE = 32;
-    int nThreads = SIZE;
-    int N = 216;
-    int M = 216;
-    // numero de Blocks en cada dimension
-    int nBlocksN = (N+nThreads-1)/nThreads;
-    int nBlocksM = (M+nThreads-1)/nThreads;
-    seq(3, h_K, h_matrix_orig, 216, 216, h_matrix_filt);
+    //Test
+    bmp_img img_filt;
+    bmp_img_init_df(&img_filt, height, width);
+    matrix_to_img(matrix_filt, height, width, img_filt);
+    bmp_img_write(&img_filt, strcat("SEQ", argv[1]));
 
     bmp_img h_img_filt;
     bmp_img_init_df(&h_img_filt, height, width);
-    matrix_to_img2(h_matrix_filt, height, width, h_img_filt);
-    bmp_img_write(&h_img_filt, "sample_filtered2.bmp");
+    matrix_to_img(h_matrix_filt, height, width, h_img_filt);
+    bmp_img_write(&h_img_filt, strcat("CUDA1", argv[1]));
 
     free(h_matrix_orig);
     free(h_matrix_filt);
+    free(matrix_filt);
+
 
     bmp_img_free(&h_img_orig);
     bmp_img_free(&h_img_filt);
-    */
-
+    bmp_img_free(&img_filt);
 
 
 
