@@ -191,12 +191,12 @@ int main (int argc, char *argv[])
     bmp_img img_filt;
     bmp_img_init_df(&img_filt, height, width);
     matrix_to_img(matrix_filt, height, width, img_filt);
-    bmp_img_write(&img_filt, strcat("SEQ", argv[1]));
+    bmp_img_write(&img_filt, "SEQ.bmp");
 
     bmp_img h_img_filt;
     bmp_img_init_df(&h_img_filt, height, width);
     matrix_to_img(h_matrix_filt, height, width, h_img_filt);
-    bmp_img_write(&h_img_filt, strcat("CUDA1", argv[1]));
+    bmp_img_write(&h_img_filt, "CUDA1.bmp");
 
     free(h_matrix_orig);
     free(h_matrix_filt);
