@@ -116,7 +116,8 @@ int main (int argc, char *argv[])
         exit(1);
     }
 
-
+    bmp_img h_img_orig;
+    bmp_img_read(&h_img_orig, argv[1]);
     int width = (int) h_img_orig.img_header.biWidth;
     int height = (int) h_img_orig.img_header.biHeight;
     int channels = 3;
@@ -124,8 +125,7 @@ int main (int argc, char *argv[])
 
     unsigned char *h_matrix_orig;
     h_matrix_orig = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
-    bmp_img h_img_orig;
-    bmp_img_read(&h_img_orig, argv[1]);
+
     img_to_matrix(h_img_orig, height, width, h_matrix_orig);
 
 
