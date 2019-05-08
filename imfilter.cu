@@ -139,6 +139,7 @@ int main (int argc, char *argv[])
 
     // Cuda 1
     unsigned char *d_matrix_orig, *d_matrix_filt, *h_matrix_filt;
+    h_matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
     double *d_K;
 
     int numBytesK = sizeof(h_K);
