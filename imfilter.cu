@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <sys/times.h>
+#include <sys/resource.h>
 #include "lib/libbmp.h"
 
 
@@ -10,35 +12,19 @@ __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* m
     int i = row;
     int j = col;
     if (row < height && col < width) {
-        //bmp_img img_filt;
-        //bmp_img_init_df(&img_filt, height, width);
-        //for (size_t i = 0; i < height; i++) { // image row
-        //    for (size_t j = 0; j < width; j++) { // pixels in image row
         float accumulator_red = 0;
         float accumulator_green = 0;
         float accumulator_blue = 0;
-        //int count = 0;
-        // position mask:
-        //def f(i,j,k,l):
-        //    return (i+k-1,j+l-1)
         for (size_t k = 0; k < size_filter; k++) { // kernel rows
             for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                //if ((i % size_filter == k) && (j % size_filter == l)) {// corresponding element
                 accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 0]);
                 accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 1]);
                 accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 2]);
-                //printf("%d %f %f %d \n", (unsigned int) accumulator_red, accumulator_red, FilterMatrix[k*size_filter + l], (int) (matrix_orig[(i*width + j)*size_filter + 0]));
-                //count += 1;
-                //}
             }
         }
-        //printf("%d\n", count);
         matrix_filt[(i*width + j)*size_filter + 0]= (unsigned int) accumulator_red;
         matrix_filt[(i*width + j)*size_filter + 1] = (unsigned int) accumulator_green;
         matrix_filt[(i*width + j)*size_filter + 2] = (unsigned int) accumulator_blue;
-        //   }
-        //}
-        //return img_filt;
     }
 }
 
@@ -70,44 +56,27 @@ void matrix_to_img(unsigned char* matrix, int height, int width, bmp_img img) {
 
 
 void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt) {
-    //int row = blockIdx.y * blockDim.y + threadIdx.y;
-    //int col = blockIdx.x * blockDim.x + threadIdx.x;
-    //int i = row;
-    //int j = col;
-    //if (row < height && col < width) {
-    //bmp_img img_filt;
-    //bmp_img_init_df(&img_filt, height, width);
     for (size_t i = size_filter/2; i < height-size_filter/2; i++) { // image row
         for (size_t j = size_filter/2; j < width-size_filter/2; j++) { // pixels in image row
             float accumulator_red = 0;
             float accumulator_green = 0;
             float accumulator_blue = 0;
-            //int count = 0;
-            // position mask:
-            //def f(i,j,k,l):
-            //    return (i+k-1,j+l-1)
             for (size_t k = 0; k < size_filter; k++) { // kernel rows
                 for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                    //if ((i % size_filter == k) && (j % size_filter == l)) {// corresponding element
                     accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 0]);
                     accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 1]);
                     accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 2]);
-                    //printf("%d %f %f %d \n", (unsigned int) accumulator_red, accumulator_red, FilterMatrix[k*size_filter + l], (int) (matrix_orig[(i*width + j)*size_filter + 0]));
-                    //count += 1;
-                    //}
                 }
             }
-            //printf("%d\n", count);
             matrix_filt[(i*width + j)*size_filter + 0]= (unsigned int) accumulator_red;
             matrix_filt[(i*width + j)*size_filter + 1] = (unsigned int) accumulator_green;
             matrix_filt[(i*width + j)*size_filter + 2] = (unsigned int) accumulator_blue;
 
         }
     }
-    //return img_filt;
-    //}
 }
 
+float GetTime(void);
 
 int main (int argc, char *argv[])
 {
@@ -134,10 +103,15 @@ int main (int argc, char *argv[])
     double h_K[9] = {0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11};
 
     // Sequential
+    float t1,t2;
+    t1=GetTime();
     seq(channels, h_K, h_matrix_orig, width, height, matrix_filt);
+    t2=GetTime();
 
 
     // Cuda 1
+    float TiempoTotalCuda1, TiempoKernelCuda1;
+    cudaEvent_t E0, E1, E2, E3;
     unsigned char *d_matrix_orig, *d_matrix_filt, *h_matrix_filt;
     h_matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
     double *d_K;
@@ -146,6 +120,13 @@ int main (int argc, char *argv[])
     int numBytesOrig = sizeof(char)*height*width*channels;
     int numBytesFilt = sizeof(char)*height*width*channels;
 
+    cudaEventCreate(&E0);
+    cudaEventCreate(&E1);
+    cudaEventCreate(&E2);
+    cudaEventCreate(&E3);
+
+    cudaEventRecord(E0, 0);
+    cudaEventSynchronize(E0);
 
     // Obtener Memoria en el device
     cudaMalloc((double**)&d_K, numBytesK);
@@ -173,7 +154,14 @@ int main (int argc, char *argv[])
     int nBlocksM = (M+nThreads-1)/nThreads;
     dim3 dimGrid(nBlocksM, nBlocksN, 1);
     dim3 dimBlock(nThreads, nThreads, 1);
+
+    cudaEventRecord(E1, 0);
+    cudaEventSynchronize(E1);
+
     Kernel01<<<dimGrid, dimBlock>>>(channels, d_K, d_matrix_orig, width, height, d_matrix_filt);
+
+    cudaEventRecord(E2, 0);
+    cudaEventSynchronize(E2);
 
     if (cudaSuccess != cudaGetLastError())
         printf("3: CUDA error at kernel exec: %s\n", cudaGetErrorString(cudaGetLastError()));
@@ -185,6 +173,25 @@ int main (int argc, char *argv[])
     cudaFree(d_K);
     cudaFree(d_matrix_orig);
     cudaFree(d_matrix_filt);
+
+    cudaEventRecord(E3, 0);
+    cudaEventSynchronize(E3);
+
+    cudaEventElapsedTime(&TiempoTotalCuda1,  E0, E3);
+    cudaEventElapsedTime(&TiempoKernelCuda1, E1, E2);
+    cudaEventDestroy(E0); cudaEventDestroy(E1); cudaEventDestroy(E2); cudaEventDestroy(E3);
+
+    printf("Dimensiones: %dx%d\n", N, M);
+    printf("nThreads: %dx%d (%d)\n", nThreads, nThreads, nThreads * nThreads);
+    printf("nBlocks: %dx%d (%d)\n", nBlocksN, nBlocksM, nBlocksN*nBlocksM);
+    printf("Tiempo Secuencial: %4.6f milseg\n", t2-t1);
+    printf("Tiempo Paralelo Global con Kernel01: %4.6f milseg\n", TiempoTotalCuda1);
+    printf("Tiempo Paralelo Kernel01: %4.6f milseg\n", TiempoKernelCuda1);
+
+    //Size of the problem?
+    //printf("Rendimiento Paralelo Global con Kernel01: %4.2f GFLOPS\n", (2.0 * (float) N * (float) N * (float) N) / (1000000.0 * TiempoTotalCuda1));
+    //printf("Rendimiento Paralelo Kernel01: %4.2f GFLOPS\n", (2.0 * (float) N * (float) N * (float) N) / (1000000.0 * TiempoKernelCuda1));
+    //printf("Rendimiento Secuencial: %4.2f GFLOPS\n", ((float) 5*N) / (1000000.0 * (t2 - t1)));
 
 
     //Test
@@ -212,4 +219,12 @@ int main (int argc, char *argv[])
 
     return 0;
 
+}
+
+float GetTime(void)        {
+    struct timeval tim;
+    struct rusage ru;
+    getrusage(RUSAGE_SELF, &ru);
+    tim=ru.ru_utime;
+    return ((double)tim.tv_sec + (double)tim.tv_usec / 1000000.0)*1000.0;
 }
