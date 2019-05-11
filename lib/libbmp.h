@@ -172,15 +172,15 @@ void bmp_pixel_init (bmp_pixel *pxl,
 
 void bmp_img_alloc (bmp_img *img)
 {
-	const size_t h = abs (img->img_header.biHeight);
-	
-	// Allocate the required memory for the pixels:
-	img->img_pixels = malloc (sizeof (bmp_pixel*) * h);
-	
-	for (size_t y = 0; y < h; y++)
-	{
-		img->img_pixels[y] = malloc (sizeof (bmp_pixel) * img->img_header.biWidth);
-	}
+    const size_t h = abs (img->img_header.biHeight);
+
+    // Allocate the required memory for the pixels:
+    img->img_pixels = (bmp_pixel  **)malloc (sizeof (bmp_pixel*) * h);
+
+    for (size_t y = 0; y < h; y++)
+    {
+        img->img_pixels[y] = (bmp_pixel  *)malloc (sizeof (bmp_pixel) * img->img_header.biWidth);
+    }
 }
 
 void bmp_img_init_df (bmp_img   *img, const int  width, const int  height)
