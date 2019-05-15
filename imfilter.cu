@@ -8,6 +8,11 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "lib/stb_image_write.h"
 
+#define SIZE 32
+#define KERNEL_SIZE 3
+#define KS_DIV_2 (KERNEL_SIZE >> 1)
+#define TILE_SIZE 12
+
 
 
 __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt) {
@@ -33,26 +38,52 @@ __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* m
     }
 }
 
-__global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt) {
+__global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt)//(Matrix N, Matrix P)
+{
+    __shared__ unsigned char* tileNs[SIZE][SIZE][3];
+    // get thread indices
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
 
-    int row = blockIdx.y * blockDim.y + threadIdx.y;
-    int col = blockIdx.x * blockDim.x + threadIdx.x;
-    int i = row;
-    int j = col;
-    if (row < height && col < width) {
+    // get the output indices
+    int row_o = ty + blockIdx.y * TILE_SIZE;
+    int col_o = tx + blockIdx.x * TILE_SIZE;
+
+    // shift to obtain input indices
+    int row_i = row_o - KS_DIV_2;
+    int col_i = col_o - KS_DIV_2;
+
+    // Load tile elements
+    if(row_i >= 0 && row_i < height && col_i >= 0 && col_i < width) {
+        tileNs[ty][tx][0] = matrix_orig[(row_i*width + col_i)*size_filter + 0];
+        tileNs[ty][tx][1] = matrix_orig[(row_i*width + col_i)*size_filter + 1];
+        tileNs[ty][tx][2] = matrix_orig[(row_i*width + col_i)*size_filter + 2];
+    }
+    else {
+        tileNs[ty][tx][0] = 0;
+        tileNs[ty][tx][1] = 0;
+        tileNs[ty][tx][2] = 0;
+    }
+
+    // Wait until all tile elements are loaded
+    __syncthreads();
+
+    // only compute if you're an output tile element
+    if(tx < TILE_SIZE && ty < TILE_SIZE){
         float accumulator_red = 0;
         float accumulator_green = 0;
         float accumulator_blue = 0;
-        for (size_t k = 0; k < size_filter; k++) { // kernel rows
-            for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 0]);
-                accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 1]);
-                accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 2]);
-            }
+        for(int y=0; y<size_filter; y++)
+            for(int x=0; x<size_filter; x++)
+                accumulator_red += FilterMatrix[y*size_filter + x] * tileNs[y+ty][x+tx][0];
+                accumulator_green += FilterMatrix[y*size_filter + x] * tileNs[y+ty][x+tx][1];
+                accumulator_blue += FilterMatrix[y*size_filter + x] * tileNs[y+ty][x+tx][2];
+        // only write values if you are inside matrix bounds
+        if(row_o < height && col_o < width) {
+            matrix_filt[(row_o*width + col_o)*size_filter + 0]= (unsigned int) accumulator_red;
+            matrix_filt[(row_o*width + col_o)*size_filter + 1] = (unsigned int) accumulator_green;
+            matrix_filt[(row_o*width + col_o)*size_filter + 2] = (unsigned int) accumulator_blue;
         }
-        matrix_filt[(i*width + j)*size_filter + 0]= (unsigned int) accumulator_red;
-        matrix_filt[(i*width + j)*size_filter + 1] = (unsigned int) accumulator_green;
-        matrix_filt[(i*width + j)*size_filter + 2] = (unsigned int) accumulator_blue;
     }
 }
 
@@ -137,7 +168,7 @@ int main (int argc, char *argv[])
     }
 
     // Ejecutar el kernel
-    int SIZE = 32;
+    //int SIZE = 32;
     int nThreads = SIZE;
     int N = width;
     int M = height;
@@ -198,27 +229,33 @@ int main (int argc, char *argv[])
     // Copiar datos desde el host en el device
     err = cudaMemcpy(d_K2, h_K, numBytesK, cudaMemcpyHostToDevice);
     if (err != cudaSuccess) {
-        printf("1: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
+        printf("5: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
     }
     err = cudaMemcpy(d_matrix_orig2, h_matrix_orig, numBytesOrig, cudaMemcpyHostToDevice);
     if (err!=cudaSuccess) {
-        printf("2: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
+        printf("6: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
     }
 
 
     cudaEventRecord(E5, 0);
     cudaEventSynchronize(E5);
 
-    Kernel01<<<dimGrid, dimBlock>>>(channels, d_K2, d_matrix_orig2, width, height, d_matrix_filt2);
+    Kernel02<<<dimGrid, dimBlock>>>(channels, d_K2, d_matrix_orig2, width, height, d_matrix_filt2);
+
+
 
     cudaEventRecord(E6, 0);
     cudaEventSynchronize(E6);
 
     if (cudaSuccess != cudaGetLastError())
-        printf("3: CUDA error at kernel exec: %s\n", cudaGetErrorString(cudaGetLastError()));
+        printf("7: CUDA error at kernel exec: %s\n", cudaGetErrorString(cudaGetLastError()));
+    //err = cudaThreadsSynchronize();
+    //if (err!=cudaSuccess) {
+    //    printf("8: CUDA error synchronizing threads: %s\n", cudaGetErrorString(err));
+    //}
     err = cudaMemcpy(h_matrix_filt2, d_matrix_filt2, numBytesFilt, cudaMemcpyDeviceToHost);
     if (err!=cudaSuccess) {
-        printf("4: CUDA error copying to Host: %s\n", cudaGetErrorString(err));
+        printf("9: CUDA error copying to Host: %s\n", cudaGetErrorString(err));
     }
 
     cudaFree(d_K2);
