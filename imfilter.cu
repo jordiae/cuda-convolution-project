@@ -200,7 +200,7 @@ int main (int argc, char *argv[])
     if (err != cudaSuccess) {
         printf("1: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
     }
-    err = cudaMemcpy(d_matrix_orig2, h_matrix_orig2, numBytesOrig, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(d_matrix_orig2, h_matrix_orig, numBytesOrig, cudaMemcpyHostToDevice);
     if (err!=cudaSuccess) {
         printf("2: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
     }
