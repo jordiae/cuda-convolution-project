@@ -196,7 +196,7 @@ int main (int argc, char *argv[])
     cudaMalloc((unsigned char ***)&d_matrix_filt2, numBytesFilt);
 
     // Copiar datos desde el host en el device
-    cudaError err = cudaMemcpy(d_K2, h_K, numBytesK, cudaMemcpyHostToDevice);
+    err = cudaMemcpy(d_K2, h_K, numBytesK, cudaMemcpyHostToDevice);
     if (err != cudaSuccess) {
         printf("1: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
     }
@@ -254,7 +254,6 @@ int main (int argc, char *argv[])
 
 
     free(h_matrix_orig);
-    free(h_matrix_orig2);
     free(h_matrix_filt);
     free(h_matrix_filt2);
     free(matrix_filt);
