@@ -2,7 +2,12 @@
 #include <string.h>
 #include <sys/times.h>
 #include <sys/resource.h>
-#include "lib/libbmp.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "lib/stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "lib/stb_image_write.h"
+
 
 
 __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt) {
@@ -27,33 +32,6 @@ __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* m
         matrix_filt[(i*width + j)*size_filter + 2] = (unsigned int) accumulator_blue;
     }
 }
-
-
-
-
-void img_to_matrix(bmp_img img, int height, int width, unsigned char* matrix) {
-    for (size_t i = 0; i < height; i++) { // image row
-        for (size_t j = 0; j < width; j++) { // pixels in image row
-            matrix[(i*width +j)*3 + 0] = img.img_pixels[i][j].red;
-            matrix[(i*width +j)*3 + 1] = img.img_pixels[i][j].green;
-            matrix[(i*width +j)*3 + 2] = img.img_pixels[i][j].blue;
-        }
-
-
-    }
-}
-
-void matrix_to_img(unsigned char* matrix, int height, int width, bmp_img img) {
-    for (size_t i = 0; i < height; i++) { // image row
-        for (size_t j = 0; j < width; j++) { // pixels in image row
-            img.img_pixels[i][j].red = matrix[(i*width +j)*3 + 0];
-            img.img_pixels[i][j].green = matrix[(i*width +j)*3 + 1];
-            img.img_pixels[i][j].blue = matrix[(i*width +j)*3 + 2];
-        }
-    }
-}
-
-
 
 void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt) {
     for (size_t i = size_filter/2; i < height-size_filter/2; i++) { // image row
@@ -85,18 +63,10 @@ int main (int argc, char *argv[])
         exit(1);
     }
 
-    bmp_img h_img_orig;
-    bmp_img_read(&h_img_orig, argv[1]);
-    int width = (int) h_img_orig.img_header.biWidth;
-    int height = (int) h_img_orig.img_header.biHeight;
+    int width, height;
     int channels = 3;
+    unsigned char *h_matrix_orig = stbi_load(argv[1], &width, &height, NULL, STBI_rgb);
     printf("La imagen es %d X %d\n", width, height);
-
-    unsigned char *h_matrix_orig;
-    h_matrix_orig = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
-
-    img_to_matrix(h_img_orig, height, width, h_matrix_orig);
-
 
     unsigned char *matrix_filt;
     matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
@@ -195,26 +165,12 @@ int main (int argc, char *argv[])
 
 
     //Test
-    bmp_img img_filt;
-    bmp_img_init_df(&img_filt, height, width);
-    matrix_to_img(matrix_filt, height, width, img_filt);
-    bmp_img_write(&img_filt, "SEQ.bmp");
-
-    bmp_img h_img_filt;
-    bmp_img_init_df(&h_img_filt, height, width);
-    matrix_to_img(h_matrix_filt, height, width, h_img_filt);
-    bmp_img_write(&h_img_filt, "CUDA1.bmp");
+    stbi_write_jpg("SEQ.jpg", width, height, STBI_rgb, matrix_filt, 255);
+    stbi_write_jpg("CUDA1.jpg", width, height, STBI_rgb, h_matrix_filt, 255);
 
     free(h_matrix_orig);
     free(h_matrix_filt);
     free(matrix_filt);
-
-
-    bmp_img_free(&h_img_orig);
-    bmp_img_free(&h_img_filt);
-    bmp_img_free(&img_filt);
-
-
 
 
     return 0;
