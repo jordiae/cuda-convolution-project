@@ -12,4 +12,7 @@ export PATH=/Soft/cuda/8.0.61/bin:$PATH
 # Cambiar el shell
 #$ -S /bin/bash
 
-./imfilter.exe sample_crop.bmp
+./imfilter.exe image_barcelona_128.jpg
+./imfilter.exe image_barcelona_512.jpg
+./imfilter.exe image_barcelona_3072.jpg
+
