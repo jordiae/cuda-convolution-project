@@ -1,13 +1,12 @@
-%%cu
 #include <stdio.h>
 #include <string.h>
 #include <sys/times.h>
 #include <sys/resource.h>
 #define STB_IMAGE_IMPLEMENTATION
-#include "/content/stb_image.h"
+#include "/lib/stb_image.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "/content/stb_image_write.h"
+#include "/lib/stb_image_write.h"
 
 #define KERNEL_SIZE 5
 #define PAD_KERNEL (KERNEL_SIZE /2)
@@ -96,10 +95,14 @@ float GetTime(void);
 
 int main (int argc, char *argv[])
 {
-    
+    if (argc!=2) {
+        printf("Usage: ./cuda image_to_be_filter\n");
+        exit(1);
+    }
+
     int width, height;
     int channels = 3;
-    unsigned char *h_matrix_orig = stbi_load("image_barcelona_3072.jpg", &width, &height, NULL, STBI_rgb);
+    unsigned char *h_matrix_orig = stbi_load(argv[1], &width, &height, NULL, STBI_rgb);
     printf("La imagen es %d X %d\n", width, height);
  
     unsigned char *matrix_filt;
