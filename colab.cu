@@ -1,3 +1,4 @@
+%%cu
 #include <stdio.h>
 #include <string.h>
 #include <sys/times.h>
@@ -9,8 +10,8 @@
 #include "/content/stb_image_write.h"
 
 #define KERNEL_SIZE 5
-#define KS_DIV_2 (KERNEL_SIZE >> 1)
-#define TILE_SIZE 12
+#define PAD_KERNEL (KERNEL_SIZE /2)
+#define TILE_SIZE 20
 #define BLOCK_SIZE (TILE_SIZE + KERNEL_SIZE - 1)
 
 __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt, int channels) {
@@ -29,63 +30,43 @@ __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* m
                 accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 2]);
             }
         }
-        //matrix_filt[4096*4096*3-1] = (i*width + j)*channels + 0;
-        if ((((i*width + j)*channels) >= 0)&&(((i*width + j)*channels+2) < (4096*4096*3-1))){
         matrix_filt[(i*width + j)*channels + 0]= (unsigned int) accumulator_red;
         matrix_filt[(i*width + j)*channels + 1] = (unsigned int) accumulator_green;
         matrix_filt[(i*width + j)*channels + 2] = (unsigned int) accumulator_blue;
-        }
     }
 }
 
 __global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt, int channels)//(Matrix N, Matrix P)
 {
     __shared__ unsigned char tileNs[BLOCK_SIZE][BLOCK_SIZE][3];
-    // get thread indices
     int tx = threadIdx.x;
     int ty = threadIdx.y;
-
-    // get the output indices
-    int row_o = ty + blockIdx.y * TILE_SIZE;
-    int col_o = tx + blockIdx.x * TILE_SIZE;
-
-    // shift to obtain input indices
-    int row_i = row_o - KS_DIV_2;
-    int col_i = col_o - KS_DIV_2;
-
-    // Load tile elements
-    if(row_i >= 0 && row_i < height && col_i >= 0 && col_i < width) {
-        tileNs[ty][tx][0] = matrix_orig[(row_i*width + col_i)*channels + 0];
-        tileNs[ty][tx][1] = matrix_orig[(row_i*width + col_i)*channels + 1];
-        tileNs[ty][tx][2] = matrix_orig[(row_i*width + col_i)*channels + 2];
+    int row = ty + blockIdx.y * TILE_SIZE;
+    int col = tx + blockIdx.x * TILE_SIZE;
+    int row_pad = row - PAD_KERNEL;
+    int col_pad = col - PAD_KERNEL;
+    if(row_pad >= 0 && row_pad < height && col_pad >= 0 && col_pad < width) {
+        tileNs[ty][tx][0] = matrix_orig[(row_pad*width + col_pad)*channels + 0];
+        tileNs[ty][tx][1] = matrix_orig[(row_pad*width + col_pad)*channels + 1];
+        tileNs[ty][tx][2] = matrix_orig[(row_pad*width + col_pad)*channels + 2];
     }
-
-    else {
-        tileNs[ty][tx][0] = 0;
-        tileNs[ty][tx][1] = 0;
-        tileNs[ty][tx][2] = 0;
-    }
-
-    // Wait until all tile elements are loaded
     __syncthreads();
 
-    // only compute if you're an output tile element
     if(tx < TILE_SIZE && ty < TILE_SIZE){
         float accumulator_red = 0;
         float accumulator_green = 0;
         float accumulator_blue = 0;
-        for(int y=0; y<size_filter; y++){
-            for(int x=0; x<size_filter; x++){
-                accumulator_red += FilterMatrix[y*size_filter + x] * tileNs[y+ty][x+tx][0];
-                accumulator_green += FilterMatrix[y*size_filter + x] * tileNs[y+ty][x+tx][1];
-                accumulator_blue += FilterMatrix[y*size_filter + x] * tileNs[y+ty][x+tx][2];
+        for(int k=0; k<size_filter; k++){
+            for(int l=0; l<size_filter; l++){
+                accumulator_red += FilterMatrix[k*size_filter + l] * tileNs[k+ty][l+tx][0];
+                accumulator_green += FilterMatrix[k*size_filter + l] * tileNs[k+ty][l+tx][1];
+                accumulator_blue += FilterMatrix[k*size_filter + l] * tileNs[k+ty][l+tx][2];
 	    }
 	}
-        // only write values if you are inside matrix bounds
-        if(row_o < height && col_o < width) {
-            matrix_filt[(row_o*width + col_o)*channels + 0]= (unsigned int) accumulator_red;
-            matrix_filt[(row_o*width + col_o)*channels + 1] = (unsigned int) accumulator_green;
-            matrix_filt[(row_o*width + col_o)*channels + 2] = (unsigned int) accumulator_blue;
+        if(row < height && col < width) {
+            matrix_filt[(row*width + col)*channels + 0]= (unsigned int) accumulator_red;
+            matrix_filt[(row*width + col)*channels + 1] = (unsigned int) accumulator_green;
+            matrix_filt[(row*width + col)*channels + 2] = (unsigned int) accumulator_blue;
         }
     }
 }
@@ -289,10 +270,11 @@ int main (int argc, char *argv[])
     printf("Tiempo Paralelo Global con Kernel02: %4.6f milseg\n", TiempoTotalCuda2);
     printf("Tiempo Paralelo Kernel02: %4.6f milseg\n", TiempoKernelCuda2);
 
-    //Size of the problem?
-    //printf("Rendimiento Paralelo Global con Kernel01: %4.2f GFLOPS\n", (2.0 * (float) N * (float) N * (float) N) / (1000000.0 * TiempoTotalCuda1));
-    //printf("Rendimiento Paralelo Kernel01: %4.2f GFLOPS\n", (2.0 * (float) N * (float) N * (float) N) / (1000000.0 * TiempoKernelCuda1));
-    //printf("Rendimiento Secuencial: %4.2f GFLOPS\n", ((float) 5*N) / (1000000.0 * (t2 - t1)));
+    printf("Rendimiento Secuencial: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * (t2 - t1))));
+    printf("Rendimiento Paralelo Global con Kernel01: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoTotalCuda1)));
+    printf("Rendimiento Paralelo Kernel01: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoKernelCuda1)));
+    printf("Rendimiento Paralelo Global con Kernel02: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoTotalCuda2)));
+    printf("Rendimiento Paralelo Kernel02: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoKernelCuda2)));
 
 
     //Test
