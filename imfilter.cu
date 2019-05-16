@@ -228,14 +228,8 @@ int main (int argc, char *argv[])
     // numero de Blocks en cada dimension
     int nBlocksN2 = (N+nThreads-1)/nThreads;
     int nBlocksM2 = (M+nThreads-1)/nThreads;
-    //dim3 dimGrid2(nBlocksM, nBlocksN, 1);
-    //dim3 dimBlock2(nThreads, nThreads, 1);
-    
-    dim3 dimBlock2, dimGrid2;
-    dimBlock2.x = BLOCK_SIZE, dimBlock2.y = BLOCK_SIZE, dimBlock2.z = 1;
-    dimGrid2.x = ceil((float)width/TILE_SIZE),
-    dimGrid2.y = ceil((float)height/TILE_SIZE),
-    dimGrid2.z = 1;
+    dim3 dimGrid2(ceil((float)width/TILE_SIZE), ceil((float)height/TILE_SIZE), 1);
+    dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE, 1);
     
     cudaEventRecord(E5, 0);
     cudaEventSynchronize(E5);
