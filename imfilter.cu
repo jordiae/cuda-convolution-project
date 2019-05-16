@@ -226,8 +226,6 @@ int main (int argc, char *argv[])
     M = height;
 
     // numero de Blocks en cada dimension
-    int nBlocksN2 = (N+nThreads-1)/nThreads;
-    int nBlocksM2 = (M+nThreads-1)/nThreads;
     dim3 dimGrid2(ceil((float)width/TILE_SIZE), ceil((float)height/TILE_SIZE), 1);
     dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE, 1);
     
@@ -275,11 +273,11 @@ int main (int argc, char *argv[])
 
     //Test
     char buf_seq[256];
-    snprintf(buf_seq, sizeof buf_seq, "%s%s", "seq_",argv[1]);
+    snprintf(buf_seq, sizeof buf_seq, "%s%s", argv[1], "_seq.jpg");
     char buf_cuda1[256];
-    snprintf(buf_cuda1, sizeof buf_cuda1, "%s%s", "cuda1_",argv[1]);
+    snprintf(buf_cuda1, sizeof buf_cuda1, "%s%s", argv[1], "_cuda1.jpg");
     char buf_cuda2[256];
-    snprintf(buf_cuda2, sizeof buf_cuda2, "%s%s", "cuda2_",argv[1]);
+    snprintf(buf_cuda2, sizeof buf_cuda2, "%s%s", argv[1], "_cuda2.jpg");
     stbi_write_jpg(buf_seq, width, height, STBI_rgb, matrix_filt, 255);
     stbi_write_jpg(buf_cuda1, width, height, STBI_rgb, h_matrix_filt, 255);
     stbi_write_jpg(buf_cuda2, width, height, STBI_rgb, h_matrix_filt2, 255);
