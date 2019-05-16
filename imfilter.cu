@@ -8,86 +8,69 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "lib/stb_image_write.h"
 
-#define SIZE 32
-#define KERNEL_SIZE 3
-#define KS_DIV_2 (KERNEL_SIZE >> 1)
-#define TILE_SIZE 12
+#define KERNEL_SIZE 5
+#define PAD_KERNEL (KERNEL_SIZE /2)
+#define TILE_SIZE 20
+#define BLOCK_SIZE (TILE_SIZE + KERNEL_SIZE - 1)
 
-
-
-__global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt) {
-
+__global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt, int channels) {
     int row = blockIdx.y * blockDim.y + threadIdx.y;
     int col = blockIdx.x * blockDim.x + threadIdx.x;
     int i = row;
     int j = col;
-    if (row < height && col < width) {
+    if ((row >= int(size_filter/2)) && (col >= int(size_filter/2)) && (row < (height-int(size_filter/2))) && (col <int((width-size_filter/2)))) {
         float accumulator_red = 0;
         float accumulator_green = 0;
         float accumulator_blue = 0;
         for (size_t k = 0; k < size_filter; k++) { // kernel rows
             for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 0]);
-                accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 1]);
-                accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 2]);
+                accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 0]);
+                accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 1]);
+                accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 2]);
             }
         }
-        matrix_filt[(i*width + j)*size_filter + 0]= (unsigned int) accumulator_red;
-        matrix_filt[(i*width + j)*size_filter + 1] = (unsigned int) accumulator_green;
-        matrix_filt[(i*width + j)*size_filter + 2] = (unsigned int) accumulator_blue;
+        matrix_filt[(i*width + j)*channels + 0]= (unsigned int) accumulator_red;
+        matrix_filt[(i*width + j)*channels + 1] = (unsigned int) accumulator_green;
+        matrix_filt[(i*width + j)*channels + 2] = (unsigned int) accumulator_blue;
     }
 }
 
-__global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt)//(Matrix N, Matrix P)
+__global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt, int channels)//(Matrix N, Matrix P)
 {
-    __shared__ unsigned char* tileNs[SIZE][SIZE][3];
-    // get thread indices
+    __shared__ unsigned char tileNs[BLOCK_SIZE][BLOCK_SIZE][3];
     int tx = threadIdx.x;
     int ty = threadIdx.y;
-
-    // get the output indices
-    int row_o = ty + blockIdx.y * TILE_SIZE;
-    int col_o = tx + blockIdx.x * TILE_SIZE;
-
-    // shift to obtain input indices
-    int row_i = row_o - KS_DIV_2;
-    int col_i = col_o - KS_DIV_2;
-
-    // Load tile elements
-    if(row_i >= 0 && row_i < height && col_i >= 0 && col_i < width) {
-        tileNs[ty][tx][0] = matrix_orig[(row_i*width + col_i)*size_filter + 0];
-        tileNs[ty][tx][1] = matrix_orig[(row_i*width + col_i)*size_filter + 1];
-        tileNs[ty][tx][2] = matrix_orig[(row_i*width + col_i)*size_filter + 2];
+    int row = ty + blockIdx.y * TILE_SIZE;
+    int col = tx + blockIdx.x * TILE_SIZE;
+    int row_pad = row - PAD_KERNEL;
+    int col_pad = col - PAD_KERNEL;
+    if(row_pad >= 0 && row_pad < height && col_pad >= 0 && col_pad < width) {
+        tileNs[ty][tx][0] = matrix_orig[(row_pad*width + col_pad)*channels + 0];
+        tileNs[ty][tx][1] = matrix_orig[(row_pad*width + col_pad)*channels + 1];
+        tileNs[ty][tx][2] = matrix_orig[(row_pad*width + col_pad)*channels + 2];
     }
-    else {
-        tileNs[ty][tx][0] = 0;
-        tileNs[ty][tx][1] = 0;
-        tileNs[ty][tx][2] = 0;
-    }
-
-    // Wait until all tile elements are loaded
     __syncthreads();
 
-    // only compute if you're an output tile element
     if(tx < TILE_SIZE && ty < TILE_SIZE){
         float accumulator_red = 0;
         float accumulator_green = 0;
         float accumulator_blue = 0;
-        for(int y=0; y<size_filter; y++)
-            for(int x=0; x<size_filter; x++)
-                accumulator_red += FilterMatrix[y*size_filter + x] * tileNs[y+ty][x+tx][0];
-                accumulator_green += FilterMatrix[y*size_filter + x] * tileNs[y+ty][x+tx][1];
-                accumulator_blue += FilterMatrix[y*size_filter + x] * tileNs[y+ty][x+tx][2];
-        // only write values if you are inside matrix bounds
-        if(row_o < height && col_o < width) {
-            matrix_filt[(row_o*width + col_o)*size_filter + 0]= (unsigned int) accumulator_red;
-            matrix_filt[(row_o*width + col_o)*size_filter + 1] = (unsigned int) accumulator_green;
-            matrix_filt[(row_o*width + col_o)*size_filter + 2] = (unsigned int) accumulator_blue;
+        for(int k=0; k<size_filter; k++){
+            for(int l=0; l<size_filter; l++){
+                accumulator_red += FilterMatrix[k*size_filter + l] * tileNs[k+ty][l+tx][0];
+                accumulator_green += FilterMatrix[k*size_filter + l] * tileNs[k+ty][l+tx][1];
+                accumulator_blue += FilterMatrix[k*size_filter + l] * tileNs[k+ty][l+tx][2];
+	    }
+	}
+        if(row < height && col < width) {
+            matrix_filt[(row*width + col)*channels + 0]= (unsigned int) accumulator_red;
+            matrix_filt[(row*width + col)*channels + 1] = (unsigned int) accumulator_green;
+            matrix_filt[(row*width + col)*channels + 2] = (unsigned int) accumulator_blue;
         }
     }
 }
 
-void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt) {
+void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt, int channels) {
     for (size_t i = size_filter/2; i < height-size_filter/2; i++) { // image row
         for (size_t j = size_filter/2; j < width-size_filter/2; j++) { // pixels in image row
             float accumulator_red = 0;
@@ -95,14 +78,14 @@ void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int 
             float accumulator_blue = 0;
             for (size_t k = 0; k < size_filter; k++) { // kernel rows
                 for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                    accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 0]);
-                    accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 1]);
-                    accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*size_filter + 2]);
+                    accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 0]);
+                    accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 1]);
+                    accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 2]);
                 }
             }
-            matrix_filt[(i*width + j)*size_filter + 0]= (unsigned int) accumulator_red;
-            matrix_filt[(i*width + j)*size_filter + 1] = (unsigned int) accumulator_green;
-            matrix_filt[(i*width + j)*size_filter + 2] = (unsigned int) accumulator_blue;
+            matrix_filt[(i*width + j)*channels + 0]= (unsigned int) accumulator_red;
+            matrix_filt[(i*width + j)*channels + 1] = (unsigned int) accumulator_green;
+            matrix_filt[(i*width + j)*channels + 2] = (unsigned int) accumulator_blue;
 
         }
     }
@@ -121,18 +104,19 @@ int main (int argc, char *argv[])
     int channels = 3;
     unsigned char *h_matrix_orig = stbi_load(argv[1], &width, &height, NULL, STBI_rgb);
     printf("La imagen es %d X %d\n", width, height);
-
+ 
     unsigned char *matrix_filt;
     matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
-    double h_K[9] = {0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11,0.11};
+    double h_K[25] = {0.0030,0.0133,0.0219,0.0133,0.0030,0.0133,0.0596,0.0983,0.0596,0.0133,0.0219,0.0983,0.1621,0.0983,0.0219,0.0133,0.0596,0.0983,0.0596,0.0133,0.0030,0.0133,0.0219,0.0133,0.0030};
+    int size_filter = KERNEL_SIZE;
 
     // Sequential
     float t1,t2;
     t1=GetTime();
-    seq(channels, h_K, h_matrix_orig, width, height, matrix_filt);
+    seq(size_filter, h_K, h_matrix_orig, width, height, matrix_filt, channels);
     t2=GetTime();
 
-
+ 
     // Cuda 1
     float TiempoTotalCuda1, TiempoKernelCuda1;
     cudaEvent_t E0, E1, E2, E3;
@@ -140,7 +124,7 @@ int main (int argc, char *argv[])
     h_matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
     double *d_K;
 
-    int numBytesK = sizeof(h_K);
+    int numBytesK = sizeof(double)*size_filter*size_filter;//sizeof(h_K);
     int numBytesOrig = sizeof(char)*height*width*channels;
     int numBytesFilt = sizeof(char)*height*width*channels;
 
@@ -168,7 +152,7 @@ int main (int argc, char *argv[])
     }
 
     // Ejecutar el kernel
-    //int SIZE = 32;
+    int SIZE = 32;
     int nThreads = SIZE;
     int N = width;
     int M = height;
@@ -181,8 +165,9 @@ int main (int argc, char *argv[])
 
     cudaEventRecord(E1, 0);
     cudaEventSynchronize(E1);
+ 
 
-    Kernel01<<<dimGrid, dimBlock>>>(channels, d_K, d_matrix_orig, width, height, d_matrix_filt);
+    Kernel01<<<dimGrid, dimBlock>>>(size_filter, d_K, d_matrix_orig, width, height, d_matrix_filt, channels);
 
     cudaEventRecord(E2, 0);
     cudaEventSynchronize(E2);
@@ -229,33 +214,42 @@ int main (int argc, char *argv[])
     // Copiar datos desde el host en el device
     err = cudaMemcpy(d_K2, h_K, numBytesK, cudaMemcpyHostToDevice);
     if (err != cudaSuccess) {
-        printf("5: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
+        printf("1: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
     }
     err = cudaMemcpy(d_matrix_orig2, h_matrix_orig, numBytesOrig, cudaMemcpyHostToDevice);
     if (err!=cudaSuccess) {
-        printf("6: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
+        printf("2: CUDA error copying to Device: %s\n", cudaGetErrorString(err));
     }
 
+    nThreads = BLOCK_SIZE;
+    N = width;
+    M = height;
 
+    // numero de Blocks en cada dimension
+    int nBlocksN2 = (N+nThreads-1)/nThreads;
+    int nBlocksM2 = (M+nThreads-1)/nThreads;
+    //dim3 dimGrid2(nBlocksM, nBlocksN, 1);
+    //dim3 dimBlock2(nThreads, nThreads, 1);
+    
+    dim3 dimBlock2, dimGrid2;
+    dimBlock2.x = BLOCK_SIZE, dimBlock2.y = BLOCK_SIZE, dimBlock2.z = 1;
+    dimGrid2.x = ceil((float)width/TILE_SIZE),
+    dimGrid2.y = ceil((float)height/TILE_SIZE),
+    dimGrid2.z = 1;
+    
     cudaEventRecord(E5, 0);
     cudaEventSynchronize(E5);
 
-    Kernel02<<<dimGrid, dimBlock>>>(channels, d_K2, d_matrix_orig2, width, height, d_matrix_filt2);
-
-
+    Kernel02<<<dimGrid2, dimBlock2>>>(size_filter, d_K2, d_matrix_orig2, width, height, d_matrix_filt2, channels);
 
     cudaEventRecord(E6, 0);
     cudaEventSynchronize(E6);
 
     if (cudaSuccess != cudaGetLastError())
-        printf("7: CUDA error at kernel exec: %s\n", cudaGetErrorString(cudaGetLastError()));
-    //err = cudaThreadsSynchronize();
-    //if (err!=cudaSuccess) {
-    //    printf("8: CUDA error synchronizing threads: %s\n", cudaGetErrorString(err));
-    //}
+        printf("3: CUDA error at kernel exec: %s\n", cudaGetErrorString(cudaGetLastError()));
     err = cudaMemcpy(h_matrix_filt2, d_matrix_filt2, numBytesFilt, cudaMemcpyDeviceToHost);
     if (err!=cudaSuccess) {
-        printf("9: CUDA error copying to Host: %s\n", cudaGetErrorString(err));
+        printf("4: CUDA error copying to Host: %s\n", cudaGetErrorString(err));
     }
 
     cudaFree(d_K2);
@@ -278,16 +272,23 @@ int main (int argc, char *argv[])
     printf("Tiempo Paralelo Global con Kernel02: %4.6f milseg\n", TiempoTotalCuda2);
     printf("Tiempo Paralelo Kernel02: %4.6f milseg\n", TiempoKernelCuda2);
 
-    //Size of the problem?
-    //printf("Rendimiento Paralelo Global con Kernel01: %4.2f GFLOPS\n", (2.0 * (float) N * (float) N * (float) N) / (1000000.0 * TiempoTotalCuda1));
-    //printf("Rendimiento Paralelo Kernel01: %4.2f GFLOPS\n", (2.0 * (float) N * (float) N * (float) N) / (1000000.0 * TiempoKernelCuda1));
-    //printf("Rendimiento Secuencial: %4.2f GFLOPS\n", ((float) 5*N) / (1000000.0 * (t2 - t1)));
+    printf("Rendimiento Secuencial: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * (t2 - t1))));
+    printf("Rendimiento Paralelo Global con Kernel01: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoTotalCuda1)));
+    printf("Rendimiento Paralelo Kernel01: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoKernelCuda1)));
+    printf("Rendimiento Paralelo Global con Kernel02: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoTotalCuda2)));
+    printf("Rendimiento Paralelo Kernel02: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoKernelCuda2)));
 
 
     //Test
-    stbi_write_jpg("SEQ.jpg", width, height, STBI_rgb, matrix_filt, 255);
-    stbi_write_jpg("CUDA1.jpg", width, height, STBI_rgb, h_matrix_filt, 255);
-    stbi_write_jpg("CUDA2.jpg", width, height, STBI_rgb, h_matrix_filt2, 255);
+    char buf_seq[256];
+    snprintf(buf_seq, sizeof buf_seq, "%s%s", "seq_",argv[1]);
+    char buf_cuda1[256];
+    snprintf(buf_cuda1, sizeof buf_cuda1, "%s%s", "cuda1_",argv[1]);
+    char buf_cuda2[256];
+    snprintf(buf_cuda2, sizeof buf_cuda2, "%s%s", "cuda2_",argv[1]);
+    stbi_write_jpg(buf_seq, width, height, STBI_rgb, matrix_filt, 255);
+    stbi_write_jpg(buf_cuda1, width, height, STBI_rgb, h_matrix_filt, 255);
+    stbi_write_jpg(buf_cuda2, width, height, STBI_rgb, h_matrix_filt2, 255);
 
 
     free(h_matrix_orig);
