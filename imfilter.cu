@@ -24,18 +24,18 @@ __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* m
         float accumulator_blue = 0;
         for (size_t k = 0; k < size_filter; k++) { // kernel rows
             for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 0]);
-                accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 1]);
-                accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 2]);
+                accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 0]);
+                accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 1]);
+                accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 2]);
             }
         }
-        matrix_filt[(i*width + j)*channels + 0]= (unsigned int) accumulator_red;
-        matrix_filt[(i*width + j)*channels + 1] = (unsigned int) accumulator_green;
-        matrix_filt[(i*width + j)*channels + 2] = (unsigned int) accumulator_blue;
+        matrix_filt[(i*width + j)*channels + 0]= (unsigned char) accumulator_red;
+        matrix_filt[(i*width + j)*channels + 1] = (unsigned char) accumulator_green;
+        matrix_filt[(i*width + j)*channels + 2] = (unsigned char)  accumulator_blue;
     }
 }
 
-__global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt, int channels)//(Matrix N, Matrix P)
+__global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt, int channels)
 {
     __shared__ unsigned char tileNs[BLOCK_SIZE][BLOCK_SIZE][3];
     int tx = threadIdx.x;
@@ -48,7 +48,14 @@ __global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* m
         tileNs[ty][tx][0] = matrix_orig[(row_pad*width + col_pad)*channels + 0];
         tileNs[ty][tx][1] = matrix_orig[(row_pad*width + col_pad)*channels + 1];
         tileNs[ty][tx][2] = matrix_orig[(row_pad*width + col_pad)*channels + 2];
+    }   
+/*
+    else {
+        tileNs[ty][tx][0] = 0;
+        tileNs[ty][tx][1] = 0;
+        tileNs[ty][tx][2] = 0;
     }
+*/    
     __syncthreads();
 
     if(tx < TILE_SIZE && ty < TILE_SIZE){
@@ -63,9 +70,9 @@ __global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* m
 	    }
 	}
         if(row < height && col < width) {
-            matrix_filt[(row*width + col)*channels + 0]= (unsigned int) accumulator_red;
-            matrix_filt[(row*width + col)*channels + 1] = (unsigned int) accumulator_green;
-            matrix_filt[(row*width + col)*channels + 2] = (unsigned int) accumulator_blue;
+            matrix_filt[(row*width + col)*channels + 0]= (unsigned char) accumulator_red;
+            matrix_filt[(row*width + col)*channels + 1] = (unsigned char) accumulator_green;
+            matrix_filt[(row*width + col)*channels + 2] = (unsigned char) accumulator_blue;
         }
     }
 }
@@ -78,14 +85,14 @@ void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int 
             float accumulator_blue = 0;
             for (size_t k = 0; k < size_filter; k++) { // kernel rows
                 for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                    accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 0]);
-                    accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 1]);
-                    accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-1)*width + (j+l-1))*channels + 2]);
+                    accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 0]);
+                    accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 1]);
+                    accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 2]);
                 }
             }
-            matrix_filt[(i*width + j)*channels + 0]= (unsigned int) accumulator_red;
-            matrix_filt[(i*width + j)*channels + 1] = (unsigned int) accumulator_green;
-            matrix_filt[(i*width + j)*channels + 2] = (unsigned int) accumulator_blue;
+	    matrix_filt[(i*width + j)*channels + 0]= (unsigned char) accumulator_red;
+            matrix_filt[(i*width + j)*channels + 1] = (unsigned char) accumulator_green;
+            matrix_filt[(i*width + j)*channels + 2] = (unsigned char) accumulator_blue;
 
         }
     }
@@ -95,29 +102,24 @@ float GetTime(void);
 
 int main (int argc, char *argv[])
 {
-    if (argc!=2) {
-        printf("Usage: ./cuda image_to_be_filter\n");
-        exit(1);
-    }
-
+    
     int width, height;
     int channels = 3;
     unsigned char *h_matrix_orig = stbi_load(argv[1], &width, &height, NULL, STBI_rgb);
     printf("La imagen es %d X %d\n", width, height);
- 
+    
     unsigned char *matrix_filt;
     matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
     double h_K[25] = {0.0030,0.0133,0.0219,0.0133,0.0030,0.0133,0.0596,0.0983,0.0596,0.0133,0.0219,0.0983,0.1621,0.0983,0.0219,0.0133,0.0596,0.0983,0.0596,0.0133,0.0030,0.0133,0.0219,0.0133,0.0030};
-    int size_filter = KERNEL_SIZE;
+    int size_filter = 5;
+
 
     // Sequential
     float t1,t2;
     t1=GetTime();
     seq(size_filter, h_K, h_matrix_orig, width, height, matrix_filt, channels);
     t2=GetTime();
-
  
-    // Cuda 1
     float TiempoTotalCuda1, TiempoKernelCuda1;
     cudaEvent_t E0, E1, E2, E3;
     unsigned char *d_matrix_orig, *d_matrix_filt, *h_matrix_filt;
@@ -175,6 +177,7 @@ int main (int argc, char *argv[])
     if (cudaSuccess != cudaGetLastError())
         printf("3: CUDA error at kernel exec: %s\n", cudaGetErrorString(cudaGetLastError()));
     err = cudaMemcpy(h_matrix_filt, d_matrix_filt, numBytesFilt, cudaMemcpyDeviceToHost);
+
     if (err!=cudaSuccess) {
         printf("4: CUDA error copying to Host: %s\n", cudaGetErrorString(err));
     }
@@ -224,10 +227,12 @@ int main (int argc, char *argv[])
     nThreads = BLOCK_SIZE;
     N = width;
     M = height;
-
-    // numero de Blocks en cada dimension
-    dim3 dimGrid2(ceil((float)width/TILE_SIZE), ceil((float)height/TILE_SIZE), 1);
-    dim3 dimBlock2(BLOCK_SIZE, BLOCK_SIZE, 1);
+    
+    dim3 dimBlock2, dimGrid2;
+    dimBlock2.x = BLOCK_SIZE, dimBlock2.y = BLOCK_SIZE, dimBlock2.z = 1;
+    dimGrid2.x = ceil((float)width/TILE_SIZE),
+    dimGrid2.y = ceil((float)height/TILE_SIZE),
+    dimGrid2.z = 1;
     
     cudaEventRecord(E5, 0);
     cudaEventSynchronize(E5);
@@ -273,11 +278,11 @@ int main (int argc, char *argv[])
 
     //Test
     char buf_seq[256];
-    snprintf(buf_seq, sizeof buf_seq, "%s%s", argv[1], "_seq.jpg");
+    snprintf(buf_seq, sizeof buf_seq, "%s%s", argv[1],"_seq.jpg");
     char buf_cuda1[256];
-    snprintf(buf_cuda1, sizeof buf_cuda1, "%s%s", argv[1], "_cuda1.jpg");
+    snprintf(buf_cuda1, sizeof buf_cuda1, "%s%s", argv[1],"_cuda1.jpg");
     char buf_cuda2[256];
-    snprintf(buf_cuda2, sizeof buf_cuda2, "%s%s", argv[1], "_cuda2.jpg");
+    snprintf(buf_cuda2, sizeof buf_cuda2, "%s%s", argv[1],"_cuda2.jpg");
     stbi_write_jpg(buf_seq, width, height, STBI_rgb, matrix_filt, 255);
     stbi_write_jpg(buf_cuda1, width, height, STBI_rgb, h_matrix_filt, 255);
     stbi_write_jpg(buf_cuda2, width, height, STBI_rgb, h_matrix_filt2, 255);

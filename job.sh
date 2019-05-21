@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export PATH=/Soft/cuda/8.0.61/bin:$PATH
+export PATH=/Soft/cuda/9.0.176/bin:$PATH
 
 ### Directivas para el gestor de colas
 # Asegurar que el job se ejecuta en el directorio actual
@@ -15,4 +15,4 @@ export PATH=/Soft/cuda/8.0.61/bin:$PATH
 ./imfilter.exe img/image_barcelona_128.jpg
 ./imfilter.exe img/image_barcelona_512.jpg
 ./imfilter.exe img/image_barcelona_3072.jpg
-
+./imfilter.exe img/image_barcelona_4096.jpg
