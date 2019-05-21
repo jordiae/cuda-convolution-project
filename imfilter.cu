@@ -37,7 +37,7 @@ __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* m
 
 __global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int height, int width, unsigned char* matrix_filt, int channels)
 {
-    __shared__ unsigned char tileNs[BLOCK_SIZE][BLOCK_SIZE][3];
+    __shared__ unsigned char tile_orig[BLOCK_SIZE][BLOCK_SIZE][3];
     int tx = threadIdx.x;
     int ty = threadIdx.y;
     int row = ty + blockIdx.y * TILE_SIZE;
@@ -45,17 +45,10 @@ __global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* m
     int row_pad = row - PAD_KERNEL;
     int col_pad = col - PAD_KERNEL;
     if(row_pad >= 0 && row_pad < height && col_pad >= 0 && col_pad < width) {
-        tileNs[ty][tx][0] = matrix_orig[(row_pad*width + col_pad)*channels + 0];
-        tileNs[ty][tx][1] = matrix_orig[(row_pad*width + col_pad)*channels + 1];
-        tileNs[ty][tx][2] = matrix_orig[(row_pad*width + col_pad)*channels + 2];
-    }   
-/*
-    else {
-        tileNs[ty][tx][0] = 0;
-        tileNs[ty][tx][1] = 0;
-        tileNs[ty][tx][2] = 0;
-    }
-*/    
+        tile_orig[ty][tx][0] = matrix_orig[(row_pad*width + col_pad)*channels + 0];
+        tile_orig[ty][tx][1] = matrix_orig[(row_pad*width + col_pad)*channels + 1];
+        tile_orig[ty][tx][2] = matrix_orig[(row_pad*width + col_pad)*channels + 2];
+    }       
     __syncthreads();
 
     if(tx < TILE_SIZE && ty < TILE_SIZE){
@@ -64,9 +57,9 @@ __global__ void Kernel02(int size_filter, double *FilterMatrix, unsigned char* m
         float accumulator_blue = 0;
         for(int k=0; k<size_filter; k++){
             for(int l=0; l<size_filter; l++){
-                accumulator_red += FilterMatrix[k*size_filter + l] * tileNs[k+ty][l+tx][0];
-                accumulator_green += FilterMatrix[k*size_filter + l] * tileNs[k+ty][l+tx][1];
-                accumulator_blue += FilterMatrix[k*size_filter + l] * tileNs[k+ty][l+tx][2];
+                accumulator_red += FilterMatrix[k*size_filter + l] * tile_orig[k+ty][l+tx][0];
+                accumulator_green += FilterMatrix[k*size_filter + l] * tile_orig[k+ty][l+tx][1];
+                accumulator_blue += FilterMatrix[k*size_filter + l] * tile_orig[k+ty][l+tx][2];
 	    }
 	}
         if(row < height && col < width) {
@@ -126,7 +119,7 @@ int main (int argc, char *argv[])
     h_matrix_filt = (unsigned char *) malloc (sizeof(unsigned char)*height*width*channels);
     double *d_K;
 
-    int numBytesK = sizeof(double)*size_filter*size_filter;//sizeof(h_K);
+    int numBytesK = sizeof(double)*size_filter*size_filter;
     int numBytesOrig = sizeof(char)*height*width*channels;
     int numBytesFilt = sizeof(char)*height*width*channels;
 
@@ -273,7 +266,7 @@ int main (int argc, char *argv[])
     printf("Rendimiento Paralelo Global con Kernel01: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoTotalCuda1)));
     printf("Rendimiento Paralelo Kernel01: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoKernelCuda1)));
     printf("Rendimiento Paralelo Global con Kernel02: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoTotalCuda2)));
-    printf("Rendimiento Paralelo Kernel02: %4.2f GFLOPS\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoKernelCuda2)));
+    printf("Rendimiento Paralelo Kernel02: %4.2f GFLOPS\n\n", (((float) N*M*size_filter*size_filter) / (1000000.0 * TiempoKernelCuda2)));
 
 
     //Test
