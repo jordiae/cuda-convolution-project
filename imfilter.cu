@@ -24,9 +24,9 @@ __global__ void Kernel01(int size_filter, double *FilterMatrix, unsigned char* m
         float accumulator_blue = 0;
         for (size_t k = 0; k < size_filter; k++) { // kernel rows
             for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 0]);
-                accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 1]);
-                accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 2]);
+                accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-size_filter/2)*width + (j+l-size_filter/2))*channels + 0]);
+                accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-size_filter/2)*width + (j+l-size_filter/2))*channels + 1]);
+                accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-size_filter/2)*width + (j+l-size_filter/2))*channels + 2]);
             }
         }
         matrix_filt[(i*width + j)*channels + 0]= (unsigned char) accumulator_red;
@@ -78,9 +78,9 @@ void seq(int size_filter, double *FilterMatrix, unsigned char* matrix_orig, int 
             float accumulator_blue = 0;
             for (size_t k = 0; k < size_filter; k++) { // kernel rows
                 for (size_t l = 0; l < size_filter; l++) { // kernel elements/cols
-                    accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 0]);
-                    accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 1]);
-                    accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-2)*width + (j+l-2))*channels + 2]);
+                    accumulator_red += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-size_filter/2)*width + (j+l-size_filter/2))*channels + 0]);
+                    accumulator_green += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-size_filter/2)*width + (j+l-size_filter/2))*channels + 1]);
+                    accumulator_blue += FilterMatrix[k*size_filter + l] * (unsigned int) (matrix_orig[((i+k-size_filter/2)*width + (j+l-size_filter/2))*channels + 2]);
                 }
             }
 	    matrix_filt[(i*width + j)*channels + 0]= (unsigned char) accumulator_red;

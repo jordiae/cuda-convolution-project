@@ -1,0 +1,60 @@
+La imagen es 128 X 128
+Dimensiones: 128x128
+nThreads: 24x24 (576)
+nBlocks: 4x4 (16)
+Tiempo Secuencial: 3.056000 milseg
+Tiempo Paralelo Global con Kernel01: 1.510400 milseg
+Tiempo Paralelo Kernel01: 0.202592 milseg
+Tiempo Paralelo Global con Kernel02: 1.197216 milseg
+Tiempo Paralelo Kernel02: 0.064544 milseg
+Rendimiento Secuencial: 0.13 GFLOPS
+Rendimiento Paralelo Global con Kernel01: 0.27 GFLOPS
+Rendimiento Paralelo Kernel01: 2.02 GFLOPS
+Rendimiento Paralelo Global con Kernel02: 0.34 GFLOPS
+Rendimiento Paralelo Kernel02: 6.35 GFLOPS
+
+La imagen es 512 X 512
+Dimensiones: 512x512
+nThreads: 24x24 (576)
+nBlocks: 16x16 (256)
+Tiempo Secuencial: 36.225002 milseg
+Tiempo Paralelo Global con Kernel01: 3.520096 milseg
+Tiempo Paralelo Kernel01: 0.581024 milseg
+Tiempo Paralelo Global con Kernel02: 3.015200 milseg
+Tiempo Paralelo Kernel02: 0.337440 milseg
+Rendimiento Secuencial: 0.18 GFLOPS
+Rendimiento Paralelo Global con Kernel01: 1.86 GFLOPS
+Rendimiento Paralelo Kernel01: 11.28 GFLOPS
+Rendimiento Paralelo Global con Kernel02: 2.17 GFLOPS
+Rendimiento Paralelo Kernel02: 19.42 GFLOPS
+
+La imagen es 3072 X 3072
+Dimensiones: 3072x3072
+nThreads: 24x24 (576)
+nBlocks: 96x96 (9216)
+Tiempo Secuencial: 1252.020020 milseg
+Tiempo Paralelo Global con Kernel01: 58.265537 milseg
+Tiempo Paralelo Kernel01: 14.295520 milseg
+Tiempo Paralelo Global con Kernel02: 56.704159 milseg
+Tiempo Paralelo Kernel02: 10.662592 milseg
+Rendimiento Secuencial: 0.19 GFLOPS
+Rendimiento Paralelo Global con Kernel01: 4.05 GFLOPS
+Rendimiento Paralelo Kernel01: 16.50 GFLOPS
+Rendimiento Paralelo Global con Kernel02: 4.16 GFLOPS
+Rendimiento Paralelo Kernel02: 22.13 GFLOPS
+
+La imagen es 4096 X 4096
+Dimensiones: 4096x4096
+nThreads: 24x24 (576)
+nBlocks: 128x128 (16384)
+Tiempo Secuencial: 2245.978027 milseg
+Tiempo Paralelo Global con Kernel01: 100.373405 milseg
+Tiempo Paralelo Kernel01: 25.179071 milseg
+Tiempo Paralelo Global con Kernel02: 98.270851 milseg
+Tiempo Paralelo Kernel02: 18.913857 milseg
+Rendimiento Secuencial: 0.19 GFLOPS
+Rendimiento Paralelo Global con Kernel01: 4.18 GFLOPS
+Rendimiento Paralelo Kernel01: 16.66 GFLOPS
+Rendimiento Paralelo Global con Kernel02: 4.27 GFLOPS
+Rendimiento Paralelo Kernel02: 22.18 GFLOPS
+
